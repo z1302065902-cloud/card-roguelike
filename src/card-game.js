@@ -200,6 +200,7 @@ export default function initCardGame() {
       game.enemy.hp -= total;
       sfx(500, 0.12);
       hitFloat(-total);
+      enemyHitAnim();
       if (game.enemy.hp <= 0) { killEnemy(); return; }
     }
     if (card.block) { game.block += card.block; sfx(300, 0.15); }
@@ -237,6 +238,13 @@ export default function initCardGame() {
     flash(`${game.enemy.name} 攻击！-${dmg}`);
     setTimeout(newTurn, 700 / SPEED);
   }
+  function enemyHitAnim() {
+    if (!game.enemy || !game.enemy.mesh) return;
+    const m = game.enemy.mesh;
+    m.scale.set(1.2, 0.8, 1.2);
+    setTimeout(() => { m.scale.set(1, 1, 1); }, 250 / SPEED);
+  }
+
   // 战后奖励（三选一卡牌）
   function showReward() {
     if (game.over) return;
@@ -284,6 +292,18 @@ export default function initCardGame() {
       if (!disabled) el.onclick = () => playCard(cardId);
       handEl.appendChild(el);
     });
+  }
+
+  function showGuide() {
+    const g = document.createElement('div');
+    g.id = 'guide';
+    g.style.cssText = 'position:fixed;bottom:160px;left:50%;transform:translateX(-50%);background:#e8794f;color:#fff;font:bold 15px Arial;padding:10px 20px;border-radius:14px;z-index:96;box-shadow:0 3px 10px rgba(0,0,0,.4);animation:pulse 1.5s infinite';
+    g.innerHTML = '👆 点击卡牌出牌！<br><span style="font-size:11px;color:#ffe28a">⚡能量够就能打</span>';
+    document.body.appendChild(g);
+    setTimeout(() => { const el = document.getElementById('guide'); if (el) el.remove(); }, 5000 / SPEED);
+    const st = document.createElement('style');
+    st.textContent = '@keyframes pulse{0%,100%{transform:translateX(-50%) scale(1)}50%{transform:translateX(-50%) scale(1.08)}}';
+    document.head.appendChild(st);
   }
 
   const hud = document.createElement('div');
@@ -341,7 +361,8 @@ export default function initCardGame() {
     drawCards(5);
     startFight();
     donateButtons('card-roguelike');
-    flash('抽牌打牌，击败敌人！点击卡牌出牌');
+    flash('👇 点击屏幕底部的卡牌出牌（打击/防御/技能）');
+    showGuide();
     requestAnimationFrame(animate);
   }
   start();
