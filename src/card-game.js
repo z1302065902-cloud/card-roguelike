@@ -245,6 +245,33 @@ export default function initCardGame() {
     setTimeout(() => { m.scale.set(1, 1, 1); }, 250 / SPEED);
   }
 
+  function attackBeam() {
+    if (!game.enemy || !game.enemy.mesh) return;
+    const start = new THREE.Vector3(0, 1.2, 2);
+    const end = new THREE.Vector3(0, 0.8, -2);
+    const geo = new THREE.BufferGeometry().setFromPoints([start, end]);
+    const mat = new THREE.LineBasicMaterial({ color: 0xffe28a, linewidth: 2 });
+    const line = new THREE.Line(geo, mat);
+    scene.add(line);
+    // 光球
+    const ball = new THREE.Mesh(new THREE.SphereGeometry(0.12, 8, 8),
+      new THREE.MeshBasicMaterial({ color: 0xffd166 }));
+    ball.position.copy(start);
+    scene.add(ball);
+    // 动画：光球飞向敌人
+    const t0 = performance.now();
+    const animId = setInterval(() => {
+      const t = (performance.now() - t0) / 250;
+      if (t >= 1) {
+        clearInterval(animId);
+        scene.remove(line); scene.remove(ball);
+        if (game.enemy) enemyHitAnim();
+        return;
+      }
+      ball.position.lerpVectors(start, end, t);
+    }, 16 / SPEED);
+  }
+
   // 战后奖励（三选一卡牌）
   function showReward() {
     if (game.over) return;
@@ -341,9 +368,9 @@ export default function initCardGame() {
   }
   renderer.domElement.addEventListener('pointerdown', () => { if (!bgm) { bgm = new BgmPlayer(); bgm.ensure(); bgm.play(); } });
 
-  // ---- 主循环 ----
-  function animate(time) {
-    requestAnimationFrame(animate);
+  // ---- 主循环（RAF + setInterval 兜底，确保画面一定更新）----
+  function tick() {
+    const time = performance.now();
     const dt = Math.min(0.05, (time - game.lastTime) / 1000);
     game.lastTime = time;
     // 敌人浮动动画
@@ -352,6 +379,12 @@ export default function initCardGame() {
     }
     renderer.render(scene, camera);
   }
+  function animate() {
+    requestAnimationFrame(animate);
+    tick();
+  }
+  // 兜底：setInterval 渲染（RAF 失效时画面也动）
+  setInterval(tick, 50);
 
   // ---- 启动 ----
   function start() {
