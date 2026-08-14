@@ -339,6 +339,24 @@ export default function initCardGame() {
     setTimeout(() => { m.scale.set(1, 1, 1); }, 250 / SPEED);
   }
 
+  function weaponSwing() {
+    if (!playerWeapon) return;
+    const w = playerWeapon;
+    const origRot = { z: w.rotation.z, y: w.rotation.y };
+    const t0 = performance.now();
+    // 挥动：旋转 180° 后复位
+    const id = setInterval(() => {
+      const t = (performance.now() - t0) / 300;
+      if (t >= 1) {
+        clearInterval(id);
+        w.rotation.z = origRot.z; w.rotation.y = origRot.y;
+        return;
+      }
+      w.rotation.z = origRot.z + (1 - t) * Math.PI;
+      w.rotation.y = origRot.y + Math.sin(t * Math.PI) * 1.2;
+    }, 16 / SPEED);
+  }
+
   function attackBeam() {
     if (!game.enemy || !game.enemy.mesh) return;
     const start = new THREE.Vector3(0, 1.2, 2);
@@ -496,8 +514,15 @@ export default function initCardGame() {
   const sfxWin = () => { sfx(523, 0.2, 'triangle'); setTimeout(() => sfx(659, 0.2, 'triangle'), 120); setTimeout(() => sfx(784, 0.3, 'triangle'), 240); };
   const sfxLose = () => { sfx(200, 0.3, 'sawtooth'); setTimeout(() => sfx(150, 0.4, 'sawtooth'), 250); };
   const sfxDraw = () => sfx(880, 0.06, 'sine', 0.06);
-  renderer.domElement.addEventListener('pointerdown', () => { if (!bgm) { bgm = new BgmPlayer(); bgm.ensure(); bgm.play(); } });
-  document.addEventListener('keydown', () => { if (!bgm) { bgm = new BgmPlayer(); bgm.ensure(); bgm.play(); } });
+  function startAudio() {
+    if (!bgm) { bgm = new BgmPlayer(); bgm.ensure(); bgm.play(); }
+    else if (bgm.ctx && bgm.ctx.state === 'suspended') bgm.ctx.resume();
+  }
+  renderer.domElement.addEventListener('pointerdown', startAudio);
+  document.addEventListener('keydown', startAudio);
+  document.addEventListener('touchstart', startAudio);
+  // 首次点击卡牌也启动（兜底）
+  document.addEventListener('click', () => { if (!bgm) startAudio(); }, { once: true });
 
   // ---- 主循环（RAF + setInterval 兜底，确保画面一定更新）----
   function tick() {

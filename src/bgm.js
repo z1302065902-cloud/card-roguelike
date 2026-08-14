@@ -1,19 +1,24 @@
 // ============================================================
-// 程序化 BGM（Web Audio 合成）— 温馨餐厅风钢琴循环
-// 无需外部文件，三端通用
+// 程序化 BGM v2（Web Audio 合成）— 更响、更稳、更丰富
+// setInterval 驱动 + 低音和声 + 主旋律，三端通用
 // ============================================================
 export class BgmPlayer {
   constructor() {
     this.ctx = null;
     this.playing = false;
-    // 温馨 C 大调琶音
-    this.notes = [261.63, 329.63, 392.00, 523.25, 392.00, 329.63]; // C4 E4 G4 C5 G4 E4
+    this.timer = null;
+    this.step = 0;
+    // 温馨 C 大调旋律（C4 E4 G4 A4 G4 E4 D4 C4）+ 低音
+    this.melody = [261.63, 329.63, 392.00, 440.00, 392.00, 329.63, 293.66, 261.63];
+    this.bass = [130.81, 164.81, 196.00, 220.00, 196.00, 164.81, 146.83, 130.81];
   }
 
   ensure() {
     if (this.ctx) return;
     try {
-      this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+      const AC = window.AudioContext || window.webkitAudioContext;
+      this.ctx = new AC();
+      if (this.ctx.state === 'suspended') this.ctx.resume();
     } catch (e) { this.ctx = null; }
   }
 
@@ -21,24 +26,43 @@ export class BgmPlayer {
     this.ensure();
     if (!this.ctx || this.playing) return;
     this.playing = true;
-    const tick = () => {
-      if (!this.playing) return;
-      const t = this.ctx.currentTime;
-      const note = this.notes[Math.floor((t / 0.45)) % this.notes.length];
-      const osc = this.ctx.createOscillator();
-      const gain = this.ctx.createGain();
-      osc.type = 'triangle';
-      osc.frequency.value = note;
-      gain.gain.setValueAtTime(0.0001, t);
-      gain.gain.exponentialRampToValueAtTime(0.06, t + 0.02);
-      gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.4);
-      osc.connect(gain).connect(this.ctx.destination);
-      osc.start(t);
-      osc.stop(t + 0.45);
-      setTimeout(tick, 400);
-    };
-    tick();
+    if (this.ctx.state === 'suspended') this.ctx.resume();
+    // setInterval 驱动（比 setTimeout 循环更稳）
+    this.timer = setInterval(() => this.tick(), 350);
+    this.tick();
   }
 
-  stop() { this.playing = false; }
+  tick() {
+    if (!this.playing || !this.ctx) return;
+    const t = this.ctx.currentTime;
+    const i = this.step % this.melody.length;
+    const note = this.melody[i];
+    const bass = this.bass[i];
+    // 主旋律（音量 0.12）
+    const o1 = this.ctx.createOscillator();
+    const g1 = this.ctx.createGain();
+    o1.type = 'triangle';
+    o1.frequency.value = note;
+    g1.gain.setValueAtTime(0.0001, t);
+    g1.gain.exponentialRampToValueAtTime(0.12, t + 0.02);
+    g1.gain.exponentialRampToValueAtTime(0.0001, t + 0.3);
+    o1.connect(g1).connect(this.ctx.destination);
+    o1.start(t); o1.stop(t + 0.35);
+    // 低音（音量 0.1）
+    const o2 = this.ctx.createOscillator();
+    const g2 = this.ctx.createGain();
+    o2.type = 'sine';
+    o2.frequency.value = bass;
+    g2.gain.setValueAtTime(0.0001, t);
+    g2.gain.exponentialRampToValueAtTime(0.1, t + 0.02);
+    g2.gain.exponentialRampToValueAtTime(0.0001, t + 0.32);
+    o2.connect(g2).connect(this.ctx.destination);
+    o2.start(t); o2.stop(t + 0.35);
+    this.step++;
+  }
+
+  stop() {
+    this.playing = false;
+    if (this.timer) { clearInterval(this.timer); this.timer = null; }
+  }
 }
