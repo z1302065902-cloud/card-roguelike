@@ -336,7 +336,8 @@ export default function initCardGame() {
   // ---- 启动 ----
   function start() {
     buildArena();
-    shuffle(game.deck);
+    game.drawPile = [...game.deck];
+    shuffle(game.drawPile);
     drawCards(5);
     startFight();
     donateButtons('card-roguelike');
