@@ -224,6 +224,18 @@ export default function initCardGame() {
   function enemyTurn() {
     if (game.over || !game.enemy) return;
     game.phase = 'enemy';
+    flash('👾 ' + game.enemy.name + ' 的回合！');
+    // 敌人攻击动画（发光+前冲）
+    if (game.enemy.mesh) {
+      const m = game.enemy.mesh;
+      m.material && (m.material.emissiveIntensity = 1);
+      const t0 = performance.now();
+      const id = setInterval(() => {
+        const t = (performance.now() - t0) / 300;
+        if (t >= 1) { clearInterval(id); m.position.set(0, 0, -2); return; }
+        m.position.z = -2 + t * 1.5;
+      }, 16 / SPEED);
+    }
     // 敌人攻击
     let dmg = game.enemy.dmg;
     if (game.block > 0) {
@@ -249,10 +261,16 @@ export default function initCardGame() {
     if (!game.enemy || !game.enemy.mesh) return;
     const start = new THREE.Vector3(0, 1.2, 2);
     const end = new THREE.Vector3(0, 0.8, -2);
-    const geo = new THREE.BufferGeometry().setFromPoints([start, end]);
-    const mat = new THREE.LineBasicMaterial({ color: 0xffe28a, linewidth: 2 });
-    const line = new THREE.Line(geo, mat);
-    scene.add(line);
+    // 光束（多根+粗圆管）
+    for (let i = -1; i <= 1; i++) {
+      const s2 = new THREE.Vector3(start.x + i * 0.15, start.y + i * 0.1, start.z);
+      const e2 = new THREE.Vector3(end.x + i * 0.15, end.y + i * 0.1, end.z);
+      const geo = new THREE.BufferGeometry().setFromPoints([s2, e2]);
+      const mat = new THREE.LineBasicMaterial({ color: i === 0 ? 0xffffff : 0xffe28a, linewidth: 3 });
+      const line = new THREE.Line(geo, mat);
+      scene.add(line);
+      setTimeout(() => scene.remove(line), 350 / SPEED);
+    }
     // 光球
     const ball = new THREE.Mesh(new THREE.SphereGeometry(0.12, 8, 8),
       new THREE.MeshBasicMaterial({ color: 0xffd166 }));
@@ -265,11 +283,27 @@ export default function initCardGame() {
       if (t >= 1) {
         clearInterval(animId);
         scene.remove(line); scene.remove(ball);
-        if (game.enemy) enemyHitAnim();
+        if (game.enemy) { enemyHitAnim(); explodeParticles(end); }
         return;
       }
       ball.position.lerpVectors(start, end, t);
     }, 16 / SPEED);
+  }
+
+  function explodeParticles(pos) {
+    for (let i = 0; i < 12; i++) {
+      const p = new THREE.Mesh(new THREE.SphereGeometry(0.05, 6, 6),
+        new THREE.MeshBasicMaterial({ color: [0xffd166, 0xff6b4a, 0xfff2b0][i % 3] }));
+      p.position.copy(pos);
+      scene.add(p);
+      const vx = (Math.random() - 0.5) * 3, vy = Math.random() * 2, vz = (Math.random() - 0.5) * 3;
+      const t0 = performance.now();
+      const id = setInterval(() => {
+        const t = (performance.now() - t0) / 400;
+        if (t >= 1) { clearInterval(id); scene.remove(p); return; }
+        p.position.set(pos.x + vx * t, pos.y + vy * t, pos.z + vz * t);
+      }, 16 / SPEED);
+    }
   }
 
   // 战后奖励（三选一卡牌）
@@ -336,6 +370,12 @@ export default function initCardGame() {
   const hud = document.createElement('div');
   hud.style.cssText = 'position:fixed;top:10px;left:10px;font:bold 14px Arial;color:#fff;background:rgba(0,0,0,0.6);padding:8px 12px;border-radius:10px;z-index:95';
   document.body.appendChild(hud);
+  // 结束回合按钮
+  const endBtn = document.createElement('button');
+  endBtn.textContent = '⏭️ 结束回合';
+  endBtn.style.cssText = 'position:fixed;top:10px;right:10px;background:#e8794f;color:#fff;font:bold 15px Arial;padding:10px 18px;border:none;border-radius:12px;cursor:pointer;z-index:95;box-shadow:0 2px 8px rgba(0,0,0,.4)';
+  endBtn.onclick = () => { if (game.phase === 'player' && !game.over) { game.discardPile.push(...game.hand); game.hand = []; renderHand(); enemyTurn(); } };
+  document.body.appendChild(endBtn);
   function updateHUD() {
     hud.innerHTML = `❤ ${Math.max(0, game.hp)}/${game.maxHp} ${game.block > 0 ? `🛡${game.block}` : ''} &nbsp;⚡ ${game.energy}/${game.maxEnergy} &nbsp;⚔️ 力量${game.power} &nbsp;🏰 第${game.room}层 &nbsp;💀 ${game.kills}` +
       (game.enemy ? `<br>👾 ${game.enemy.name} ❤${Math.max(0, game.enemy.hp)}` : '');
