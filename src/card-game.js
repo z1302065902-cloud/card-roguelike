@@ -30,10 +30,10 @@ const START_DECK = ['strike', 'strike', 'strike', 'guard', 'guard', 'bash'];
 
 // 敌人
 const ENEMIES = [
-  { name: '骷髅兵', hp: 25, dmg: 5, color: 0xcccccc, scale: 0.7 },
-  { name: '哥布林', hp: 20, dmg: 7, color: 0x6bc46b, scale: 0.7 },
-  { name: '暗影刺客', hp: 35, dmg: 9, color: 0x8a5adf, scale: 0.8 },
-  { name: '地牢领主', hp: 60, dmg: 12, color: 0xe05a5a, scale: 1.1 },
+  { name: '骷髅兵', hp: 25, dmg: 5, color: 0xcccccc, scale: 0.7, weapon: 'sword' },
+  { name: '哥布林', hp: 20, dmg: 7, color: 0x6bc46b, scale: 0.7, weapon: 'axe' },
+  { name: '暗影刺客', hp: 35, dmg: 9, color: 0x8a5adf, scale: 0.8, weapon: 'dagger' },
+  { name: '地牢领主', hp: 60, dmg: 12, color: 0xe05a5a, scale: 1.1, weapon: 'hammer' },
 ];
 
 export default function initCardGame() {
@@ -111,6 +111,68 @@ export default function initCardGame() {
     }
   }
 
+  // ---- 武器系统（几何体，主角/敌人每关换武器）----
+  const WEAPON_TYPES = {
+    sword: { name: '长剑', color: 0xc0c0c0 },
+    axe: { name: '巨斧', color: 0xb8a060 },
+    staff: { name: '法杖', color: 0x6eb5ff },
+    bow: { name: '长弓', color: 0x9a6b3f },
+    dagger: { name: '匕首', color: 0x8a8a8a },
+    hammer: { name: '战锤', color: 0x6a6a8a },
+  };
+  function buildWeapon(type) {
+    const w = WEAPON_TYPES[type] || WEAPON_TYPES.sword;
+    const g = new THREE.Group();
+    const mat = new THREE.MeshStandardMaterial({ color: w.color, metalness: 0.6, roughness: 0.3 });
+    if (type === 'staff') {
+      const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 1.2, 6), mat);
+      shaft.position.y = 0.6; g.add(shaft);
+      const orb = new THREE.Mesh(new THREE.SphereGeometry(0.12, 8, 8),
+        new THREE.MeshBasicMaterial({ color: 0x6eb5ff, transparent: true, opacity: 0.9 }));
+      orb.position.y = 1.3; g.add(orb);
+    } else if (type === 'bow') {
+      const curve = new THREE.EllipseCurve(0, 0, 0.4, 0.55, 0, Math.PI * 2, false, 0);
+      const pts = curve.getPoints(12);
+      const geo = new THREE.BufferGeometry().setFromPoints(pts.map(p => new THREE.Vector3(p.x, p.y, 0)));
+      const bow = new THREE.Line(geo, new THREE.LineBasicMaterial({ color: w.color }));
+      bow.position.y = 0.7; g.add(bow);
+      const string = new THREE.Line(
+        new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 0.15, 0), new THREE.Vector3(0, 1.25, 0)]),
+        new THREE.LineBasicMaterial({ color: 0xffffff }));
+      string.position.y = 0; g.add(string);
+    } else if (type === 'dagger') {
+      const blade = new THREE.Mesh(new THREE.ConeGeometry(0.05, 0.6, 6), mat); blade.position.y = 0.5; g.add(blade);
+      const handle = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.2, 6), new THREE.MeshStandardMaterial({ color: 0x5a3a20 }));
+      handle.position.y = 0.15; g.add(handle);
+    } else if (type === 'hammer') {
+      const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.8, 6), new THREE.MeshStandardMaterial({ color: 0x5a3a20 }));
+      shaft.position.y = 0.4; g.add(shaft);
+      const head = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.25, 0.25), mat); head.position.y = 0.85; g.add(head);
+    } else if (type === 'axe') {
+      const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.9, 6), new THREE.MeshStandardMaterial({ color: 0x5a3a20 }));
+      shaft.position.y = 0.45; g.add(shaft);
+      const blade = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.2, 0.08), mat); blade.position.set(0.15, 0.8, 0); blade.rotation.z = 0.3; g.add(blade);
+    } else {
+      // sword
+      const blade = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.9, 0.1), mat); blade.position.y = 0.6; g.add(blade);
+      const tip = new THREE.Mesh(new THREE.ConeGeometry(0.08, 0.2, 6), mat); tip.position.y = 1.1; g.add(tip);
+      const guard = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.06, 0.1), new THREE.MeshStandardMaterial({ color: 0x8a6a3f }));
+      guard.position.y = 0.2; g.add(guard);
+      const handle = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.2, 6), new THREE.MeshStandardMaterial({ color: 0x5a3a20 }));
+      handle.position.y = 0.05; g.add(handle);
+    }
+    g.traverse(o => { if (o.isMesh) o.castShadow = true; });
+    return g;
+  }
+  function equipWeapon(parent, type, side = 1) {
+    const w = buildWeapon(type);
+    w.position.set(0.4 * side, 0.9, 0);
+    w.rotation.z = -0.4 * side;
+    parent.add(w);
+    return w;
+  }
+
+
   function buildHuman(color = 0xe8794f) {
     const g = new THREE.Group();
     const mat = new THREE.MeshStandardMaterial({ color, roughness: 0.6 });
@@ -138,6 +200,12 @@ export default function initCardGame() {
       pupil.position.set(side * 0.17, 0.7, 0.5);
       g.add(eye); g.add(pupil);
     }
+    // 敌人武器（按类型）
+    const enemyWeapon = t.weapon || 'sword';
+    const ew = buildWeapon(enemyWeapon);
+    ew.position.set(0.5, 0.6, 0);
+    ew.rotation.z = -0.3;
+    g.add(ew);
     g.position.set(0, 0, -2);
     g.castShadow = true;
     scene.add(g);
@@ -147,6 +215,15 @@ export default function initCardGame() {
   const playerMesh = buildHuman();
   playerMesh.position.set(0, 0, 2);
   scene.add(playerMesh);
+  let playerWeapon = null;
+  function equipPlayerWeapon() {
+    if (playerWeapon) playerMesh.remove(playerWeapon);
+    const types = Object.keys(WEAPON_TYPES);
+    const t = types[Math.floor(Math.random() * types.length)];
+    playerWeapon = equipWeapon(playerMesh, t, 1);
+    flash('🗡️ 获得武器：' + WEAPON_TYPES[t].name);
+  }
+  // equipPlayerWeapon 移到 start() 调用
 
   // ---- 卡牌系统 ----
   function shuffle(arr) {
@@ -178,6 +255,7 @@ export default function initCardGame() {
     updateHUD();
   }
   function startFight() {
+    equipPlayerWeapon();  // 每关换玩家武器
     const types = ENEMIES.slice(0, Math.min(ENEMIES.length, 1 + Math.floor(game.room / 3)));
     const t = types[Math.floor(Math.random() * types.length)];
     game.enemy = { ...t, hp: t.hp + game.room * 3, mesh: null };
@@ -428,6 +506,7 @@ export default function initCardGame() {
 
   // ---- 启动 ----
   function start() {
+    equipPlayerWeapon();
     buildArena();
     game.drawPile = [...game.deck];
     shuffle(game.drawPile);
