@@ -15,14 +15,14 @@ const SPEED = TEST ? (parseFloat(params.get('speed')) || 4) : 1;
 
 // ---- 卡牌库 ----
 const CARD_LIBRARY = [
-  { id: 'strike', name: '打击', cost: 1, dmg: 6, type: 'atk', color: '#e8794f', desc: '造成 6 点伤害' },
-  { id: 'bash', name: '重击', cost: 2, dmg: 12, type: 'atk', color: '#d95e38', desc: '造成 12 点伤害' },
-  { id: 'guard', name: '防御', cost: 1, block: 6, type: 'def', color: '#6eb5ff', desc: '获得 6 点护甲' },
-  { id: 'iron', name: '铁壁', cost: 2, block: 12, type: 'def', color: '#4a8ac9', desc: '获得 12 点护甲' },
-  { id: 'fire', name: '火球', cost: 2, dmg: 10, burn: 3, type: 'atk', color: '#ff6b4a', desc: '10 伤害 + 灼烧 3' },
-  { id: 'heal', name: '治愈', cost: 1, heal: 8, type: 'skill', color: '#6bc46b', desc: '恢复 8 点生命' },
-  { id: 'double', name: '双重打击', cost: 1, dmg: 4, hits: 2, type: 'atk', color: '#ff9f43', desc: '造成 4×2 伤害' },
-  { id: 'power', name: '蓄力', cost: 1, power: 2, type: 'skill', color: '#9a6bff', desc: '力量 +2' },
+  { id: 'strike', name: '打击 Strike', cost: 1, dmg: 6, type: 'atk', color: '#e8794f', desc: '造成6伤害 Deal 6 dmg' },
+  { id: 'bash', name: '重击 Bash', cost: 2, dmg: 12, type: 'atk', color: '#d95e38', desc: '造成12伤害 Deal 12 dmg' },
+  { id: 'guard', name: '防御 Guard', cost: 1, block: 6, type: 'def', color: '#6eb5ff', desc: '获得6护甲 Gain 6 block' },
+  { id: 'iron', name: '铁壁 Iron', cost: 2, block: 12, type: 'def', color: '#4a8ac9', desc: '获得12护甲 Gain 12 block' },
+  { id: 'fire', name: '火球 Fireball', cost: 2, dmg: 10, burn: 3, type: 'atk', color: '#ff6b4a', desc: '10伤害+灼烧 10dmg+burn' },
+  { id: 'heal', name: '治愈 Heal', cost: 1, heal: 8, type: 'skill', color: '#6bc46b', desc: '恢复8生命 Heal 8' },
+  { id: 'double', name: '双重打击 Double', cost: 1, dmg: 4, hits: 2, type: 'atk', color: '#ff9f43', desc: '4×2伤害 4×2 dmg' },
+  { id: 'power', name: '蓄力 Power', cost: 1, power: 2, type: 'skill', color: '#9a6bff', desc: '力量+2 Strength +2' },
 ];
 
 // 初始卡组
@@ -250,6 +250,7 @@ export default function initCardGame() {
     game.discardPile.push(...game.hand);
     game.hand = [];
     drawCards(5);
+    sfxDraw();
     game.phase = 'player';
     renderHand();
     updateHUD();
@@ -271,12 +272,13 @@ export default function initCardGame() {
     game.energy -= card.cost;
     game.hand = game.hand.filter(c => c !== cardId);
     game.discardPile.push(cardId);
+    sfxCard();
     // 效果
     const dmg = (card.dmg || 0) + game.power;
     if (card.dmg) {
       const total = card.hits ? dmg * card.hits : dmg;
       game.enemy.hp -= total;
-      sfx(500, 0.12);
+      sfxHit();
       hitFloat(-total);
       enemyHitAnim();
       if (game.enemy.hp <= 0) { killEnemy(); return; }
@@ -296,12 +298,14 @@ export default function initCardGame() {
     game.kills++;
     game.gold += 10 + game.room * 2;
     game.enemy = null;
+    sfxWin();
     flash(`💀 ${killed.name} 被击败！`);
     setTimeout(() => showReward(), 800 / SPEED);
   }
   function enemyTurn() {
     if (game.over || !game.enemy) return;
     game.phase = 'enemy';
+    sfxEnemy();
     flash('👾 ' + game.enemy.name + ' 的回合！');
     // 敌人攻击动画（发光+前冲）
     if (game.enemy.mesh) {
@@ -411,6 +415,7 @@ export default function initCardGame() {
   }
   function gameOver() {
     game.over = true;
+    sfxLose();
     flash(`☠️ 倒在 ${game.room} 层 · 击杀 ${game.kills}`);
     setTimeout(() => { if (confirm('再来一局？')) location.reload(); }, 1500 / SPEED);
   }
@@ -473,18 +478,26 @@ export default function initCardGame() {
     setTimeout(() => { el.style.transform = 'translateY(-25px)'; el.style.opacity = '0'; setTimeout(() => el.remove(), 700); }, 100);
   }
   let bgm;
-  function sfx(freq, dur) {
+  function sfx(freq, dur, type = 'square', vol = 0.08) {
     try {
       if (!bgm) return;
       const o = bgm.ctx.createOscillator(), g = bgm.ctx.createGain();
-      o.type = 'square'; o.frequency.value = freq;
-      g.gain.setValueAtTime(0.08, bgm.ctx.currentTime);
+      o.type = type; o.frequency.value = freq;
+      g.gain.setValueAtTime(vol, bgm.ctx.currentTime);
       g.gain.exponentialRampToValueAtTime(0.001, bgm.ctx.currentTime + dur);
       o.connect(g).connect(bgm.ctx.destination);
       o.start(); o.stop(bgm.ctx.currentTime + dur);
     } catch (e) {}
   }
+  // 专属音效
+  const sfxCard = () => sfx(600, 0.08, 'triangle', 0.1);
+  const sfxHit = () => sfx(200, 0.15, 'sawtooth', 0.12);
+  const sfxEnemy = () => sfx(150, 0.3, 'sawtooth', 0.12);
+  const sfxWin = () => { sfx(523, 0.2, 'triangle'); setTimeout(() => sfx(659, 0.2, 'triangle'), 120); setTimeout(() => sfx(784, 0.3, 'triangle'), 240); };
+  const sfxLose = () => { sfx(200, 0.3, 'sawtooth'); setTimeout(() => sfx(150, 0.4, 'sawtooth'), 250); };
+  const sfxDraw = () => sfx(880, 0.06, 'sine', 0.06);
   renderer.domElement.addEventListener('pointerdown', () => { if (!bgm) { bgm = new BgmPlayer(); bgm.ensure(); bgm.play(); } });
+  document.addEventListener('keydown', () => { if (!bgm) { bgm = new BgmPlayer(); bgm.ensure(); bgm.play(); } });
 
   // ---- 主循环（RAF + setInterval 兜底，确保画面一定更新）----
   function tick() {
